@@ -1,4 +1,7 @@
 #include "pager.h"
+#include "mmu.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_SIZE 100
 
@@ -65,6 +68,10 @@ void pager_create(pid_t pid)
 
 void *pager_extend(pid_t pid)
 {
+    int *__attribute__((aligned(4096))) ptr;
+    unsigned long desiredAddress = 0x60000000;
+    ptr = (int *)desiredAddress;
+    return ptr;
 }
 
 void pager_fault(pid_t pid, void *addr)
