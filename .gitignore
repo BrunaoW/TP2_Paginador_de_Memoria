@@ -56,3 +56,4 @@ bin/
 *.log.0
 *.out
 !./mempager-tests/*.out
+*.pmem.img.*
