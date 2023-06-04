@@ -76,20 +76,11 @@ void pager_create(pid_t pid)
     int i, j, num_pages, flag = 0;
     num_pages = (UVM_MAXADDR - UVM_BASEADDR + 1) / sysconf(_SC_PAGESIZE);
 
+    // Check if there's an available slot in the table list
     for (i = 0; i < size_table_list; i++)
     {
-        if (table_list[i].num_pages == 0)
+        if (table_list[i].pid == 0)
         {
-            table_list[i].pid = pid;
-            table_list[i].num_pages = num_pages;
-            table_list[i].frames = (int *)malloc(num_pages * sizeof(int));
-            table_list[i].blocks = (int *)malloc(num_pages * sizeof(int));
-
-            for (j = 0; j < num_pages; j++)
-            {
-                table_list[i].frames[j] = -1;
-                table_list[i].blocks[j] = -1;
-            }
             flag = 1;
             break;
         }
@@ -97,23 +88,24 @@ void pager_create(pid_t pid)
 
     if (flag == 0)
     {
-        table_list = realloc(table_list, (100 + size_table_list) * sizeof(table_list_t));
+        // If no available slot, resize the table list
+        int new_size = size_table_list * 2;
+        table_list = realloc(table_list, new_size * sizeof(table_list_t));
+        memset(table_list + size_table_list, 0, (new_size - size_table_list) * sizeof(table_list_t));
+        i = size_table_list;
+        size_table_list = new_size;
+    }
 
-        table_list[size_table_list].pid = pid;
-        table_list[size_table_list].num_pages = num_pages;
-        table_list[size_table_list].frames = (int *)malloc(num_pages * sizeof(int));
-        table_list[size_table_list].blocks = (int *)malloc(num_pages * sizeof(int));
-        for (j = 0; j < num_pages; j++)
-        {
-            table_list[size_table_list].frames[j] = -1;
-            table_list[size_table_list].blocks[j] = -1;
-        }
-        j = size_table_list + 1;
-        size_table_list += 100;
-        for (; j < size_table_list; j++)
-        {
-            table_list[j].num_pages = 0;
-        }
+    // Initialize the page table for the process
+    table_list[i].pid = pid;
+    table_list[i].num_pages = num_pages;
+    table_list[i].frames = (int *)malloc(num_pages * sizeof(int));
+    table_list[i].blocks = (int *)malloc(num_pages * sizeof(int));
+
+    for (j = 0; j < num_pages; j++)
+    {
+        table_list[i].frames[j] = -1;
+        table_list[i].blocks[j] = -1;
     }
 }
 
@@ -124,6 +116,7 @@ void *pager_extend(pid_t pid)
 
     int i, j, block;
 
+    // Find an available block in the block vector
     for (i = 0; i < size_block_vector; i++)
     {
         if (block_vector[i] == 0)
@@ -135,23 +128,31 @@ void *pager_extend(pid_t pid)
         }
     }
 
+    // Find the page table for the process
+    int table_index = -1;
     for (i = 0; i < size_table_list; i++)
     {
         if (table_list[i].pid == pid)
         {
-            for (j = 0; j < table_list[i].num_pages; j++)
-            {
-                if (table_list[i].blocks[j] == -1)
-                {
-                    table_list[i].blocks[j] = block;
-                    break;
-                }
-
-                if (j == (table_list[i].num_pages) - 1)
-                    return NULL;
-            }
+            table_index = i;
             break;
         }
+    }
+
+    // If no page table found, return NULL
+    if (table_index == -1)
+        return NULL;
+
+    // Find an available page slot in the page table
+    for (j = 0; j < table_list[table_index].num_pages; j++)
+    {
+        if (table_list[table_index].blocks[j] == -1)
+        {
+            table_list[table_index].blocks[j] = block;
+            break;
+        }
+        if (j == (table_list[table_index].num_pages) - 1)
+            return NULL;
     }
 
     return (void *)(UVM_BASEADDR + (intptr_t)(j * sysconf(_SC_PAGESIZE)));
